@@ -1,0 +1,15 @@
+[Unit]
+Description=node-temperature MQTT node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/node-temperature
+ExecStart=/opt/node-temperature/.venv/bin/python -m node_temperature.main --config /opt/node-temperature/config.ini
+Restart=on-failure
+RestartSec=5
+User=renewvan
+
+[Install]
+WantedBy=multi-user.target
