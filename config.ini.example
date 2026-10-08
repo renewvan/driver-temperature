@@ -2,7 +2,22 @@
 ; ======================================
 ; Copy this file to config.ini and override only what differs from
 ; config.default.ini. config.ini is gitignored — it holds this
-; installation's real MQTT broker host and any hardware-specific settings.
+; installation's real MQTT broker host and probe-to-id mapping.
 
 [mqtt]
 host = 192.168.1.10
+
+[node]
+; Matches the systemd unit's StateDirectory=node-temperature
+state_dir = /var/lib/node-temperature
+
+; Find serials with: ls /sys/bus/w1/devices
+[sensor.cabin]
+serial = 28-000000000001
+name = Cabin
+unit = C
+
+[sensor.fridge]
+serial = 28-000000000002
+name = Fridge
+unit = C

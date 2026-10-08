@@ -2,48 +2,77 @@
 
 1-Wire (DS18B20) temperature sensing node for the renewvan bus
 
-Scaffolded from `renewvan/node-tank`'s reference shape via `renewvan/skills`'
-`scaffold-node` skill (per the **Node** term in `hub/docs/architecture.md`'s
-Terminology section: "anything that publishes one specific device or feed
-onto the renewvan bus, normalized into the device model"). Layout: pure,
-unit-testable conversion math with no I/O, a layered
-`config.default.ini`/`config.ini` loader (`config.py`), a persistent MQTT
-publisher with LWT (`publisher.py`), a thin publish loop (`driver.py`), a
-systemd unit, and its own Dockerfile + CI publishing a versioned image.
-
-**This repo is a scaffold, not a working node yet** — `driver.py`'s
-`read_and_publish()` raises `NotImplementedError` until the design round
-below is resolved and implemented.
-
-## Design checklist (resolve before first real commit)
-
-- [ ] **Sensing or remapping?** Does this node own the sensing (reads
-      hardware directly, like node-tank's ADS1115) or remap an existing feed
-      (like node-battery's Victron remap)?
-- [ ] **Topics published** — replace the section below with the real
-      `renewvan/temperature/<id>/<property>` fields, split into identity
-      (published once) vs live (republished every poll). See node-tank's
-      README "Topics published" section for the shape to match.
-- [ ] **Hub schema** — does Temperature extend an existing
-      `hub/schema/*.schema.json` entity, or need a new
-      `hub/schema/temperature.schema.json` + example fixtures
-      (`hub/schema/validate-examples.sh` must pass)?
-- [ ] **Wiring** — replace the section below with real hardware
-      wiring/config, or delete it if this node remaps an existing feed
-      instead of reading hardware directly.
-- [ ] **`NodeConfig`** (`node_temperature/config.py`) — add the hardware/feed
-      -specific fields this node needs, mirrored into `config.default.ini`.
-- [ ] **Hub integration** — once a version is tagged, add a
-      `node-temperature` service block to `hub/docker-compose.yml` (pattern:
-      node-tank's block) and any new keys to `hub/.env.example`.
+Sensing node: reads every standalone temperature sensor the Pi can see
+directly and publishes it as the `temperature` entity (`hub`'s
+`schema/temperature.schema.json`). It does **not** publish temperatures that
+belong to another entity's hardware: tank water temperature stays on
+`node-tank` (NTC on the ADS1115), battery temperature on `node-battery`
+(Victron feed), ESP32 sensors on the ESPHome firmware. Layout follows
+`renewvan/node-tank`: pure parsing (`sensors.py`), sysfs I/O (`reader.py`),
+layered `config.default.ini`/`config.ini` (`config.py`), persistent MQTT
+publisher with LWT (`publisher.py`), publish loop (`driver.py`).
 
 ## Topics published
 
-TODO — see the design checklist above.
+Retained, under `renewvan/temperature/<id>/`. `<id>` is the `[sensor.<id>]`
+section name from `config.ini`; an unconfigured 1-Wire probe is published
+under its serial; the Pi CPU sensor is `cpu`.
+
+**Identity fields** (published at startup, and again after a user edit):
+- `name` — string, label shown on the dashboard (editable)
+- `unit` — `"C"` / `"F"`, **display preference only** (editable)
+- `source` — `"w1"` (DS18B20) / `"cpu"` (Pi SoC)
+- `serial` — string, 1-Wire id, e.g. `28-0000075a1b2c` (`w1` only)
+
+**Live fields** (republished every poll, ~3s default):
+- `temperature_c` — number, **always degrees Celsius** regardless of `unit`.
+  Skipped (not cleared) while `status` is not `ok`, so consumers must gate on
+  `status == "ok"` before rendering it
+- `status` — `ok` / `no_reading` (CRC failure, the DS18B20 85.0 °C power-on
+  default, unparseable or out-of-range value) / `disconnected` (probe no
+  longer on the bus; keeps being polled and recovers on replug)
+
+**Command topics** (unretained, for the dashboard):
+- `renewvan/temperature/<id>/name/set` — payload: JSON string, e.g. `"Galley fridge"`
+- `renewvan/temperature/<id>/unit/set` — payload: `"C"` or `"F"` (any case)
+
+A valid edit is persisted to `state/<id>.json` and republished retained; it
+then **wins over `config.ini`** on every restart, which only supplies the
+defaults. Invalid payloads are logged and dropped. If the state file cannot
+be written the edit is rejected, so the retained topic never advertises a
+value that would be lost on restart.
+
+**Node liveness:** `renewvan/temperature/health` — `online`/`offline` via MQTT LWT.
+
+Payload shapes match `hub`'s `schema/temperature.schema.json`.
 
 ## Wiring
 
-TODO — see the design checklist above.
+### DS18B20 probes (1-Wire)
+
+All probes share one data line; each has a unique 64-bit serial.
+
+- VDD → 3.3V, GND → GND, DATA → the chosen GPIO (GPIO4 = pin 7 by default)
+- **4.7 kΩ pull-up between DATA and 3.3V** (one resistor for the whole bus)
+- Enable the kernel driver, then reboot:
+  `dtoverlay=w1-gpio,gpiopin=4` in `/boot/firmware/config.txt`
+- List serials: `ls /sys/bus/w1/devices` (entries named `28-...`)
+
+Map a probe to an id and label in `config.ini`:
+
+```ini
+[sensor.fridge]
+serial = 28-0000075a1b2c
+name = Fridge
+unit = C
+```
+
+No overlay, or no probes: the node still publishes the CPU sensor.
+
+### Pi CPU
+
+Built in (`/sys/class/thermal/thermal_zone0/temp`). Disable with
+`cpu_enabled = false`.
 
 ## Development
 
@@ -67,7 +96,12 @@ level).
 
 `config.default.ini` ships every key with a default. Copy
 `config.ini.example` to `config.ini` (gitignored) and override only what
-differs.
+differs. Malformed `[sensor.*]` sections (bad serial, unit, duplicate serial,
+topic-unsafe id) fail at startup rather than being silently skipped.
+
+`state_dir` (default `<install dir>/state`) must be writable by the service
+user, and a mounted volume under Docker, or dashboard edits are lost when the
+container is recreated.
 
 ## Running
 

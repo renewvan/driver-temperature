@@ -10,6 +10,9 @@ ExecStart=/opt/node-temperature/.venv/bin/python -m node_temperature.main --conf
 Restart=on-failure
 RestartSec=5
 User=renewvan
+# Creates /var/lib/node-temperature owned by User=; set `state_dir` to it in
+# config.ini so dashboard edits persist there.
+StateDirectory=node-temperature
 
 [Install]
 WantedBy=multi-user.target
