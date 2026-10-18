@@ -70,3 +70,37 @@ def test_available_serial_is_published_as_is(tmp_path: Path) -> None:
     serial = read_host_serial(write_cpuinfo(tmp_path, PI_CPUINFO))
     info = json.loads(build_info("v1", serial, write_manifest(tmp_path)))
     assert info["host_serial"] == "00000000a1b2c3d4"
+
+
+def test_default_manifest_is_the_repo_root_file_in_a_checkout() -> None:
+    info = json.loads(build_info("v1", None))
+    repo_manifest = json.loads(
+        (Path(__file__).resolve().parent.parent / "manifest.json").read_text()
+    )
+    assert info == {**repo_manifest, "version": "v1"}
+
+
+def test_manifest_beside_the_module_wins_over_the_repo_root(tmp_path: Path, monkeypatch) -> None:
+    import node_temperature.node_info as node_info
+
+    beside = write_manifest(tmp_path, {**MANIFEST, "product": "Image copy"})
+    root_dir = tmp_path / "root"
+    root_dir.mkdir()
+    root = root_dir / "manifest.json"
+    root.write_text(json.dumps({**MANIFEST, "product": "Repo root"}))
+
+    monkeypatch.setattr(node_info, "MANIFEST_PATHS", (beside, root))
+    assert json.loads(build_info("v1", None))["product"] == "Image copy"
+
+    beside.unlink()  # a checkout run has no copy beside the module
+    assert json.loads(build_info("v1", None))["product"] == "Repo root"
+
+
+def test_production_lookup_prefers_the_copy_beside_the_module() -> None:
+    import node_temperature.node_info as node_info
+
+    package_dir = Path(node_info.__file__).resolve().parent
+    assert node_info.MANIFEST_PATHS == (
+        package_dir / "manifest.json",  # copied in by the image build
+        package_dir.parent / "manifest.json",  # repo root, for a checkout run
+    )
