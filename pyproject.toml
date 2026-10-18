@@ -1,6 +1,8 @@
 [project]
 name = "node-temperature"
-version = "0.1.0"
+# Fixed placeholder: nothing reads this. The git release tag is the only version
+# source (stamped into the image as NODE_VERSION).
+version = "0.0.0"
 description = "1-Wire (DS18B20) temperature sensing node for the renewvan bus"
 requires-python = ">=3.11"
 dependencies = [
