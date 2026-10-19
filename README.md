@@ -44,7 +44,14 @@ value that would be lost on restart.
 
 **Node liveness:** `renewvan/temperature/health` — `online`/`offline` via MQTT LWT.
 
-Payload shapes match `hub`'s `schema/temperature.schema.json`.
+**Node info:** `renewvan/temperature/info` — one retained JSON message
+describing this Node (see [Node info](#node-info)). Published on **every
+connect, immediately before `online`**, so a consumer that sees `online`
+always finds info already retained. It is **never cleared**: it stays retained
+when the Node goes offline or its last will fires, which is what lets a
+consumer say "offline, last seen vX".
+
+Payload shapes match `hub`'s `schema/node-info.schema.json` for info and `hub`'s `schema/temperature.schema.json` for entities.
 
 ## Wiring
 
@@ -126,3 +133,47 @@ Tagging a GitHub release builds and publishes
 `ghcr.io/<owner>/node-temperature:<tag>`, which `hub`'s deployment compose file pins
 by tag (never builds from source — see
 `hub/docs/adr/0001-compose-services-via-pinned-images-not-git-submodules.md`).
+
+The release workflow passes the tag as the `NODE_VERSION` build argument, which
+the Dockerfile promotes to an environment variable the Node reads (see
+[Node info](#node-info)). Nothing else carries a version.
+
+## Node info
+
+The Node describes itself to the dashboard with a manifest plus two runtime
+values. Contract: `hub`'s `schema/node-info.schema.json` (decision record:
+`hub/docs/adr/0011-node-manifest-and-retained-info-topic.md`).
+
+**`manifest.json`** (repo root) is the single source of the static fields:
+`node` (`temperature`, the topic key), `product`, `source`, `publishes`, and
+optional `manufacturer` / `homepage`. `version` and `host_serial` are
+**forbidden** in it. The image build copies it beside the module
+(`node_temperature/manifest.json`); the Node reads that copy first and falls
+back to the repo-root file for a checkout run.
+
+**`version`** comes from the git release tag and nowhere else. The release
+workflow passes it as the `NODE_VERSION` build argument, which becomes an
+environment variable the Node reads. When `NODE_VERSION` is unset or empty (a
+checkout run, a local `docker build`) the Node reports the literal **`dev`**.
+There is no `version` file or `__version__`, and the `pyproject.toml` version
+is a fixed placeholder nothing reads.
+
+**`host_serial`** is the `Serial` line of the host's `/proc/cpuinfo`, read once
+at start. A default container can read it, so no compose or Dockerfile change
+is needed. It is **omitted** (never faked, never `unknown`) when the file is
+unreadable, the line is missing or empty, or the value is all zeros.
+
+`node_temperature/node_info.py` is a small helper deliberately **copied** into
+each Python node repo rather than shared as a package, so each Node releases
+independently.
+
+**CI gate:** `.github/workflows/manifest.yml` validates `manifest.json`
+against `node-manifest.schema.json`, fetched from `hub` at a **pinned commit**
+(`HUB_REF`) with `ajv-cli`, and fails if a manifest containing `version` is
+accepted. Bump `HUB_REF` deliberately to adopt a newer contract. To check
+locally:
+
+```bash
+npx --yes ajv-cli@5 validate -s path/to/hub/schema/node-manifest.schema.json -d manifest.json
+```
+

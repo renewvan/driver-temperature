@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from node_temperature.config import AppConfig
+from node_temperature.node_info import build_info, read_host_serial
 from node_temperature.publisher import Publisher
 from node_temperature.reader import discover_w1_serials, read_cpu, read_w1
 from node_temperature.sensors import (
@@ -242,7 +244,10 @@ def subscribe_set_commands(publisher: Publisher, sensor: Sensor, state_dir: Path
 
 
 def run(config: AppConfig) -> None:
-    publisher = Publisher(config.mqtt)
+    # Version is stamped by the release build (NODE_VERSION); unset reports "dev".
+    # Host serial is read once, here, at process start.
+    info = build_info(os.environ.get("NODE_VERSION"), read_host_serial())
+    publisher = Publisher(config.mqtt, info)
     publisher.connect()
     sensors = build_sensors(config)
     for sensor in sensors.values():

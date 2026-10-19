@@ -174,3 +174,38 @@ def test_corrupt_or_invalid_state_is_ignored(tmp_path: Path) -> None:
     save_state_field("x", "unit", "K", state)  # invalid value on disk
     apply_persisted_state(sensor, state)
     assert sensor.unit == "C"
+
+
+def test_run_stamps_node_version_env_into_published_info(tmp_path: Path, monkeypatch) -> None:
+    import json as _json
+
+    import node_temperature.driver as driver
+
+    config, _ = make_config(tmp_path)
+    captured: dict[str, str] = {}
+
+    class StopRun(Exception):
+        pass
+
+    class SpyPublisher:
+        def __init__(self, mqtt_config, info: str) -> None:
+            captured["info"] = info
+
+        def connect(self) -> None:
+            raise StopRun
+
+        def disconnect(self) -> None: ...
+
+    monkeypatch.setattr(driver, "Publisher", SpyPublisher)
+    monkeypatch.setattr(driver, "read_host_serial", lambda: None)
+
+    for env, expected in (("v4.5.6", "v4.5.6"), (None, "dev")):
+        if env is None:
+            monkeypatch.delenv("NODE_VERSION", raising=False)
+        else:
+            monkeypatch.setenv("NODE_VERSION", env)
+        try:
+            driver.run(config)
+        except StopRun:
+            pass
+        assert _json.loads(captured["info"])["version"] == expected
