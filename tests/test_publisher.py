@@ -64,3 +64,25 @@ def test_info_is_never_cleared_when_the_node_goes_offline(publisher: Publisher) 
     assert client.published == [(HEALTH_TOPIC, "offline", True)]
     # the broker publishes the last will on an unclean death: offline on health only
     assert client.will == (HEALTH_TOPIC, "offline", True)
+
+
+def test_subscribing_while_the_connack_handler_resubscribes_does_not_crash(
+    publisher: Publisher,
+) -> None:
+    """paho runs _on_connect on its own thread, started by connect(), while the main
+    thread is still calling subscribe(). A subscribe() landing while _on_connect is
+    walking the subscription table must not break that walk."""
+    client = publisher._client
+    publisher.subscribe("a/set", lambda payload: None)
+    added = False
+
+    def main_thread_subscribes_mid_iteration(topic, qos=0) -> None:
+        nonlocal added
+        if not added:
+            added = True
+            # The main thread registers another topic right now, while the network
+            # thread is inside the loop over the subscription table.
+            publisher._subscriptions["b/set"] = lambda payload: None
+
+    client.subscribe = main_thread_subscribes_mid_iteration
+    publisher._on_connect(client, None, {}, 0)

@@ -45,7 +45,9 @@ class Publisher:
             # retained. Never cleared on offline or by the will ("last seen vX").
             client.publish(INFO_TOPIC, payload=self._info, qos=1, retain=True)
             client.publish(HEALTH_TOPIC, payload="online", qos=1, retain=True)
-            for topic in self._subscriptions:
+            # Snapshot: this runs on paho's network thread, which connect() starts
+            # before the main thread has finished subscribe()-ing its topics.
+            for topic in list(self._subscriptions):
                 client.subscribe(topic, qos=1)
         else:
             logger.error("MQTT connect failed with rc=%s", rc)
