@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from node_temperature.config import load_config
-from node_temperature.driver import (
+from driver_temperature.config import load_config
+from driver_temperature.driver import (
     Sensor,
     adopt_unconfigured_probes,
     apply_persisted_state,
@@ -40,7 +40,7 @@ def make_config(tmp_path: Path, extra: str = ""):
     zone.write_text("51600\n")
     local = tmp_path / "config.ini"
     local.write_text(
-        f"[node]\nw1_base_path = {base}\ncpu_thermal_zone = {zone}\n"
+        f"[device]\nw1_base_path = {base}\ncpu_thermal_zone = {zone}\n"
         f"state_dir = {tmp_path / 'state'}\n{extra}"
     )
     return load_config(local_path=local), base
@@ -176,10 +176,10 @@ def test_corrupt_or_invalid_state_is_ignored(tmp_path: Path) -> None:
     assert sensor.unit == "C"
 
 
-def test_run_stamps_node_version_env_into_published_info(tmp_path: Path, monkeypatch) -> None:
+def test_run_stamps_device_version_env_into_published_info(tmp_path: Path, monkeypatch) -> None:
     import json as _json
 
-    import node_temperature.driver as driver
+    import driver_temperature.driver as driver
 
     config, _ = make_config(tmp_path)
     captured: dict[str, str] = {}
@@ -197,13 +197,13 @@ def test_run_stamps_node_version_env_into_published_info(tmp_path: Path, monkeyp
         def disconnect(self) -> None: ...
 
     monkeypatch.setattr(driver, "Publisher", SpyPublisher)
-    monkeypatch.setattr(driver, "read_host_serial", lambda: None)
+    monkeypatch.setattr(driver, "read_board_serial", lambda: None)
 
     for env, expected in (("v4.5.6", "v4.5.6"), (None, "dev")):
         if env is None:
-            monkeypatch.delenv("NODE_VERSION", raising=False)
+            monkeypatch.delenv("DEVICE_VERSION", raising=False)
         else:
-            monkeypatch.setenv("NODE_VERSION", env)
+            monkeypatch.setenv("DEVICE_VERSION", env)
         try:
             driver.run(config)
         except StopRun:

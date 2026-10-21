@@ -1,6 +1,6 @@
 """Pure temperature-sensor parsing and classification -- no I/O.
 
-Same split as node-tank's calibration.py: everything here takes raw text/
+Same split as driver-tank's calibration.py: everything here takes raw text/
 numbers in and returns a value out, so it is fixture-testable without a
 Pi. The filesystem reads live in reader.py.
 """

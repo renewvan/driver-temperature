@@ -1,9 +1,9 @@
 [project]
-name = "node-temperature"
+name = "driver-temperature"
 # Fixed placeholder: nothing reads this. The git release tag is the only version
-# source (stamped into the image as NODE_VERSION).
+# source (stamped into the image as DEVICE_VERSION).
 version = "0.0.0"
-description = "1-Wire (DS18B20) temperature sensing node for the renewvan bus"
+description = "1-Wire (DS18B20) temperature sensing device for the renewvan bus"
 requires-python = ">=3.11"
 dependencies = [
     "paho-mqtt>=1.6,<2",
@@ -14,7 +14,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["node_temperature*"]
+include = ["driver_temperature*"]
 
 [tool.ruff]
 line-length = 100

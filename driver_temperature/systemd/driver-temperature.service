@@ -1,0 +1,18 @@
+[Unit]
+Description=driver-temperature MQTT device
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/driver-temperature
+ExecStart=/opt/driver-temperature/.venv/bin/python -m driver_temperature.main --config /opt/driver-temperature/config.ini
+Restart=on-failure
+RestartSec=5
+User=renewvan
+# Creates /var/lib/driver-temperature owned by User=; set `state_dir` to it in
+# config.ini so dashboard edits persist there.
+StateDirectory=driver-temperature
+
+[Install]
+WantedBy=multi-user.target

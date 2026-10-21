@@ -1,8 +1,8 @@
 {
-  "node": "temperature",
+  "device": "temperature",
   "product": "1-Wire temperature sensor",
   "source": "DS18B20 1-Wire probes and the Pi SoC thermal zone",
   "publishes": ["temperature"],
   "manufacturer": "renewvan",
-  "homepage": "https://github.com/renewvan/node-temperature"
+  "homepage": "https://github.com/renewvan/driver-temperature"
 }

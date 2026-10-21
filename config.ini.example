@@ -1,4 +1,4 @@
-; node-temperature — local configuration
+; driver-temperature — local configuration
 ; ======================================
 ; Copy this file to config.ini and override only what differs from
 ; config.default.ini. config.ini is gitignored — it holds this
@@ -7,9 +7,9 @@
 [mqtt]
 host = 192.168.1.10
 
-[node]
-; Matches the systemd unit's StateDirectory=node-temperature
-state_dir = /var/lib/node-temperature
+[device]
+; Matches the systemd unit's StateDirectory=driver-temperature
+state_dir = /var/lib/driver-temperature
 
 ; Find serials with: ls /sys/bus/w1/devices
 [sensor.cabin]

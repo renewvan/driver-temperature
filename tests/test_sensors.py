@@ -1,6 +1,6 @@
 import pytest
 
-from node_temperature.sensors import (
+from driver_temperature.sensors import (
     STATUS_NO_READING,
     STATUS_OK,
     SensorReadError,

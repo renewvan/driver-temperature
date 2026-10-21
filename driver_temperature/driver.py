@@ -1,6 +1,6 @@
 """Publish loop: read every temperature sensor -> renewvan/temperature/<id>/<property>.
 
-Sensing node (it owns the reads, like node-tank), shaped per
+Sensing device (it owns the reads, like driver-tank), shaped per
 hub/schema/temperature.schema.json.
 
 Identity fields (retained, published at startup and after a user edit):
@@ -9,7 +9,7 @@ Live fields (republished every poll):
 - temperature_c (only when status == ok), status
 
 User-editable identity: `name` and `unit` accept a JSON-string payload on
-renewvan/temperature/<id>/<field>/set (unretained, node-tank's last_inspected_at
+renewvan/temperature/<id>/<field>/set (unretained, driver-tank's last_inspected_at
 pattern). A valid edit is persisted to state/<id>.json -- install-local runtime
 state, never written back into config.ini -- and republished retained. On the
 next start the persisted value wins over the config.ini default.
@@ -28,11 +28,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from node_temperature.config import AppConfig
-from node_temperature.node_info import build_info, read_host_serial
-from node_temperature.publisher import Publisher
-from node_temperature.reader import discover_w1_serials, read_cpu, read_w1
-from node_temperature.sensors import (
+from driver_temperature.config import AppConfig
+from driver_temperature.device_info import build_info, read_board_serial
+from driver_temperature.publisher import Publisher
+from driver_temperature.reader import discover_w1_serials, read_cpu, read_w1
+from driver_temperature.sensors import (
     STATUS_DISCONNECTED,
     STATUS_OK,
     Reading,
@@ -111,14 +111,14 @@ def apply_persisted_state(sensor: Sensor, state_dir: Path) -> None:
 
 def build_sensors(config: AppConfig) -> dict[str, Sensor]:
     """Configured probes + built-in CPU sensor, state overlay applied."""
-    state_dir = config.node.state_dir
+    state_dir = config.device.state_dir
     sensors: dict[str, Sensor] = {}
-    for cfg in config.node.sensors:
+    for cfg in config.device.sensors:
         sensors[cfg.id] = Sensor(
             id=cfg.id, source="w1", name=cfg.name, unit=cfg.unit, serial=cfg.serial
         )
-    if config.node.cpu is not None:
-        cpu = config.node.cpu
+    if config.device.cpu is not None:
+        cpu = config.device.cpu
         sensors[cpu.id] = Sensor(
             id=cpu.id,
             source="cpu",
@@ -135,17 +135,17 @@ def adopt_unconfigured_probes(config: AppConfig, sensors: dict[str, Sensor]) -> 
     """Add any bus probe not yet in `sensors` (id = serial). Returns the new ones."""
     known_serials = {s.serial for s in sensors.values() if s.serial}
     added: list[Sensor] = []
-    for serial in discover_w1_serials(config.node.w1_base_path):
+    for serial in discover_w1_serials(config.device.w1_base_path):
         if serial in known_serials or serial in sensors:
             continue
         sensor = Sensor(
             id=serial,
             source="w1",
             name=serial,
-            unit=config.node.default_unit,
+            unit=config.device.default_unit,
             serial=serial,
         )
-        apply_persisted_state(sensor, config.node.state_dir)
+        apply_persisted_state(sensor, config.device.state_dir)
         sensors[serial] = sensor
         added.append(sensor)
         logger.info("Discovered unconfigured probe %s; publishing as id=%s", serial, serial)
@@ -170,13 +170,13 @@ def read_sensor(config: AppConfig, sensor: Sensor) -> Reading | None:
         assert sensor.thermal_zone is not None
         return read_cpu(sensor.thermal_zone)
     assert sensor.serial is not None
-    return read_w1(config.node.w1_base_path, sensor.serial)
+    return read_w1(config.device.w1_base_path, sensor.serial)
 
 
 def publish_live(publisher: Publisher, sensor: Sensor, reading: Reading | None) -> None:
     """status always; temperature_c only when ok.
 
-    A non-ok sensor skips the temperature_c publish (node-tank's NTC failure
+    A non-ok sensor skips the temperature_c publish (driver-tank's NTC failure
     convention) rather than clearing it: an empty retained payload would reach
     live subscribers as an unparseable message. The last retained temperature_c
     therefore stays on the broker, so consumers MUST gate on `status == ok`
@@ -208,7 +208,7 @@ def handle_set_command(
     """Apply a name/unit edit: validate, persist, republish retained.
 
     Payload is a JSON string, e.g. "F" or "Galley fridge". Invalid input is
-    logged and dropped (no error topic), matching node-tank's /set handlers.
+    logged and dropped (no error topic), matching driver-tank's /set handlers.
     A failed disk write rejects the edit so the retained topic never claims a
     value that would be lost at the next restart.
     """
@@ -244,14 +244,14 @@ def subscribe_set_commands(publisher: Publisher, sensor: Sensor, state_dir: Path
 
 
 def run(config: AppConfig) -> None:
-    # Version is stamped by the release build (NODE_VERSION); unset reports "dev".
-    # Host serial is read once, here, at process start.
-    info = build_info(os.environ.get("NODE_VERSION"), read_host_serial())
+    # Version is stamped by the release build (DEVICE_VERSION); unset reports "dev".
+    # Board serial is read once, here, at process start.
+    info = build_info(os.environ.get("DEVICE_VERSION"), read_board_serial())
     publisher = Publisher(config.mqtt, info)
     publisher.connect()
     sensors = build_sensors(config)
     for sensor in sensors.values():
-        subscribe_set_commands(publisher, sensor, config.node.state_dir)
+        subscribe_set_commands(publisher, sensor, config.device.state_dir)
 
     try:
         while True:
@@ -259,8 +259,8 @@ def run(config: AppConfig) -> None:
             poll_once(publisher, config, sensors)
             # Probes discovered mid-run need their /set topics too.
             for sensor_id in set(sensors) - before:
-                subscribe_set_commands(publisher, sensors[sensor_id], config.node.state_dir)
-            time.sleep(config.node.update_interval_ms / 1000)
+                subscribe_set_commands(publisher, sensors[sensor_id], config.device.state_dir)
+            time.sleep(config.device.update_interval_ms / 1000)
     except KeyboardInterrupt:
         logger.info("Shutting down")
     finally:

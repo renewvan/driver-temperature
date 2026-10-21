@@ -1,10 +1,10 @@
 import pytest
 
-import node_temperature.publisher as publisher_module
-from node_temperature.config import load_config
-from node_temperature.publisher import HEALTH_TOPIC, INFO_TOPIC, Publisher
+import driver_temperature.publisher as publisher_module
+from driver_temperature.config import load_config
+from driver_temperature.publisher import HEALTH_TOPIC, INFO_TOPIC, Publisher
 
-INFO = '{"node": "temperature", "version": "v1"}'
+INFO = '{"device": "temperature", "version": "v1"}'
 
 
 class FakeClient:
@@ -57,7 +57,7 @@ def test_failed_connect_publishes_nothing(publisher: Publisher) -> None:
     assert client.published == []
 
 
-def test_info_is_never_cleared_when_the_node_goes_offline(publisher: Publisher) -> None:
+def test_info_is_never_cleared_when_the_device_goes_offline(publisher: Publisher) -> None:
     client = connect(publisher)
     client.published.clear()
     publisher.disconnect()

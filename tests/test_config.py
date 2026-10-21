@@ -2,15 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from node_temperature.config import load_config
+from driver_temperature.config import load_config
 
 
 def test_load_config_defaults() -> None:
     config = load_config()
     assert config.mqtt.port == 1883
-    assert config.node.sensors == ()
-    assert config.node.cpu is not None
-    assert (config.node.cpu.id, config.node.cpu.unit) == ("cpu", "C")
+    assert config.device.sensors == ()
+    assert config.device.cpu is not None
+    assert (config.device.cpu.id, config.device.cpu.unit) == ("cpu", "C")
 
 
 def test_load_config_local_override(tmp_path: Path) -> None:
@@ -29,9 +29,9 @@ def _load(tmp_path: Path, body: str):
 def test_sensor_sections_inherit_defaults(tmp_path: Path) -> None:
     config = _load(
         tmp_path,
-        "[node]\ndefault_unit = F\n[sensor.fridge]\nserial = 28-0000075A1B2C\n",
+        "[device]\ndefault_unit = F\n[sensor.fridge]\nserial = 28-0000075A1B2C\n",
     )
-    (sensor,) = config.node.sensors
+    (sensor,) = config.device.sensors
     assert (sensor.id, sensor.name, sensor.unit) == ("fridge", "fridge", "F")
     assert sensor.serial == "28-0000075a1b2c"  # lowercased
 
@@ -41,7 +41,7 @@ def test_sensor_section_overrides(tmp_path: Path) -> None:
         tmp_path,
         "[sensor.cabin]\nserial = 28-000000000001\nname = Cabin air\nunit = f\n",
     )
-    (sensor,) = config.node.sensors
+    (sensor,) = config.device.sensors
     assert (sensor.name, sensor.unit) == ("Cabin air", "F")
 
 
@@ -54,7 +54,7 @@ def test_sensor_section_overrides(tmp_path: Path) -> None:
         "[sensor.a/b]\nserial = 28-000000000001\n",  # topic-unsafe id
         "[sensor.a]\nserial = 28-000000000001\n[sensor.b]\nserial = 28-000000000001\n",  # dup
         "[sensor.cpu]\nserial = 28-000000000001\n",  # collides with built-in
-        "[node]\ndefault_unit = K\n",
+        "[device]\ndefault_unit = K\n",
     ],
 )
 def test_invalid_config_fails_loudly(tmp_path: Path, body: str) -> None:
@@ -63,4 +63,4 @@ def test_invalid_config_fails_loudly(tmp_path: Path, body: str) -> None:
 
 
 def test_cpu_can_be_disabled(tmp_path: Path) -> None:
-    assert _load(tmp_path, "[node]\ncpu_enabled = false\n").node.cpu is None
+    assert _load(tmp_path, "[device]\ncpu_enabled = false\n").device.cpu is None

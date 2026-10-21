@@ -1,8 +1,8 @@
 """Layered INI config: config.default.ini (shipped) + config.ini (local
 override).
 
-Same two-file pattern as every renewvan/node-* repo (see
-node-tank/node_tank/config.py): config.default.ini ships every key with a
+Same two-file pattern as every renewvan/driver-* repo (see
+driver-tank/driver_tank/config.py): config.default.ini ships every key with a
 safe default and is never edited at an install; config.ini is a gitignored,
 install-local file that overrides only what differs.
 """
@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from node_temperature.sensors import W1_SERIAL_RE, normalize_name, normalize_unit
+from driver_temperature.sensors import W1_SERIAL_RE, normalize_name, normalize_unit
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class CpuConfig:
 
 
 @dataclass(frozen=True)
-class NodeConfig:
+class DeviceConfig:
     update_interval_ms: int
     w1_base_path: Path
     default_unit: str
@@ -64,7 +64,7 @@ class NodeConfig:
 @dataclass(frozen=True)
 class AppConfig:
     mqtt: MqttConfig
-    node: NodeConfig
+    device: DeviceConfig
 
 
 def load_config(
@@ -79,21 +79,21 @@ def load_config(
         logger.info("No local config override at %s; using defaults only", local_path)
 
     mqtt = parser["mqtt"]
-    node = parser["node"]
+    device = parser["device"]
 
-    default_unit = _unit(node.get("default_unit", "C"), "node.default_unit")
+    default_unit = _unit(device.get("default_unit", "C"), "device.default_unit")
     sensors = _load_sensors(parser, default_unit)
     cpu = None
-    if node.getboolean("cpu_enabled", True):
-        cpu_id = node.get("cpu_id", "cpu")
+    if device.getboolean("cpu_enabled", True):
+        cpu_id = device.get("cpu_id", "cpu")
         if any(sensor.id == cpu_id for sensor in sensors):
             raise ValueError(f"[sensor.{cpu_id}] collides with the built-in cpu sensor id")
         cpu = CpuConfig(
             id=cpu_id,
-            name=_name(node.get("cpu_name", "Pi CPU"), "node.cpu_name"),
-            unit=_unit(node.get("cpu_unit", "C"), "node.cpu_unit"),
+            name=_name(device.get("cpu_name", "Pi CPU"), "device.cpu_name"),
+            unit=_unit(device.get("cpu_unit", "C"), "device.cpu_unit"),
             thermal_zone=Path(
-                node.get("cpu_thermal_zone", "/sys/class/thermal/thermal_zone0/temp")
+                device.get("cpu_thermal_zone", "/sys/class/thermal/thermal_zone0/temp")
             ),
         )
 
@@ -103,15 +103,15 @@ def load_config(
             port=mqtt.getint("port", 1883),
             username=mqtt.get("username") or None,
             password=mqtt.get("password") or None,
-            client_id=mqtt.get("client_id", "node-temperature"),
+            client_id=mqtt.get("client_id", "driver-temperature"),
             reconnect_min_delay=mqtt.getfloat("reconnect_min_delay", 1.0),
             reconnect_max_delay=mqtt.getfloat("reconnect_max_delay", 30.0),
         ),
-        node=NodeConfig(
-            update_interval_ms=node.getint("update_interval_ms", 3000),
-            w1_base_path=Path(node.get("w1_base_path", "/sys/bus/w1/devices")),
+        device=DeviceConfig(
+            update_interval_ms=device.getint("update_interval_ms", 3000),
+            w1_base_path=Path(device.get("w1_base_path", "/sys/bus/w1/devices")),
             default_unit=default_unit,
-            state_dir=Path(node.get("state_dir", str(DEFAULT_STATE_DIR))),
+            state_dir=Path(device.get("state_dir", str(DEFAULT_STATE_DIR))),
             cpu=cpu,
             sensors=sensors,
         ),

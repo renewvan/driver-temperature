@@ -1,14 +1,14 @@
-# node-temperature
+# driver-temperature
 
-Domain glossary for node-temperature: what each published field *means*,
+Domain glossary for driver-temperature: what each published field *means*,
 independent of the Python that computes it. Entity contract:
 `hub/schema/temperature.schema.json`.
 
 ## Language
 
 **Temperature sensor**:
-A standalone thermometer this node reads directly: a 1-Wire DS18B20 probe or the Pi's SoC thermal zone. Published as its own `temperature` entity keyed by sensor id.
-_Avoid_: Thermistor/NTC sensor (that is node-tank's water-temperature input, published on the tank entity); heater/battery temperature (owned by their own nodes).
+A standalone thermometer this device reads directly: a 1-Wire DS18B20 probe or the Pi's SoC thermal zone. Published as its own `temperature` entity keyed by sensor id.
+_Avoid_: Thermistor/NTC sensor (that is driver-tank's water-temperature input, published on the tank entity); heater/battery temperature (owned by their own devices).
 
 **Sensor id**:
 The `<id>` topic segment. The `[sensor.<id>]` section name for a configured probe, the serial for an unconfigured probe, `cpu` for the built-in. Stable across renames: `name` is the label, the id is the key.

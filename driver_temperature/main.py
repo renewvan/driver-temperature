@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""node-temperature entrypoint."""
+"""driver-temperature entrypoint."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ import argparse
 import logging
 from pathlib import Path
 
-from node_temperature.config import DEFAULT_CONFIG_PATH, load_config
-from node_temperature.driver import run
+from driver_temperature.config import DEFAULT_CONFIG_PATH, load_config
+from driver_temperature.driver import run
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="node-temperature: MQTT Temperature node")
+    parser = argparse.ArgumentParser(description="driver-temperature: MQTT Temperature device")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
         "-c", "--config", default="config.ini", help="Path to local config.ini override"
