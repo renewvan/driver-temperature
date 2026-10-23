@@ -7,7 +7,7 @@
 [mqtt]
 host = 192.168.1.10
 
-[device]
+[driver]
 ; Matches the systemd unit's StateDirectory=driver-temperature
 state_dir = /var/lib/driver-temperature
 

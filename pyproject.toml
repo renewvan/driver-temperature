@@ -1,9 +1,9 @@
 [project]
 name = "driver-temperature"
 # Fixed placeholder: nothing reads this. The git release tag is the only version
-# source (stamped into the image as DEVICE_VERSION).
+# source (stamped into the image as DRIVER_VERSION).
 version = "0.0.0"
-description = "1-Wire (DS18B20) temperature sensing device for the renewvan bus"
+description = "1-Wire (DS18B20) temperature sensing driver for the renewvan bus"
 requires-python = ">=3.11"
 dependencies = [
     "paho-mqtt>=1.6,<2",
