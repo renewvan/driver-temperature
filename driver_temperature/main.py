@@ -12,7 +12,7 @@ from driver_temperature.driver import run
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="driver-temperature: MQTT Temperature device")
+    parser = argparse.ArgumentParser(description="driver-temperature: MQTT Temperature driver")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
         "-c", "--config", default="config.ini", help="Path to local config.ini override"

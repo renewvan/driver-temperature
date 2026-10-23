@@ -1,10 +1,10 @@
 """Publish loop: read every temperature sensor -> renewvan/temperature/<id>/<property>.
 
-Sensing device (it owns the reads, like driver-tank), shaped per
+Sensing driver (it owns the reads, like driver-tank), shaped per
 hub/schema/temperature.schema.json.
 
 Identity fields (retained, published at startup and after a user edit):
-- name, unit, source, serial (serial: 1-Wire probes only)
+- driver (this Driver's key, constant), name, unit, source, serial (serial: 1-Wire probes only)
 Live fields (republished every poll):
 - temperature_c (only when status == ok), status
 
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from driver_temperature.config import AppConfig
-from driver_temperature.device_info import build_info, read_board_serial
+from driver_temperature.driver_info import build_info, read_board_serial
 from driver_temperature.publisher import Publisher
 from driver_temperature.reader import discover_w1_serials, read_cpu, read_w1
 from driver_temperature.sensors import (
@@ -41,6 +41,10 @@ from driver_temperature.sensors import (
 )
 
 logger = logging.getLogger(__name__)
+
+# This Driver's key: its repo name minus `driver-`; equals the `driver` value on every
+# instance and the renewvan/<key>/info segment (see manifest.json).
+DRIVER_KEY = "temperature"
 
 
 @dataclass
@@ -111,14 +115,14 @@ def apply_persisted_state(sensor: Sensor, state_dir: Path) -> None:
 
 def build_sensors(config: AppConfig) -> dict[str, Sensor]:
     """Configured probes + built-in CPU sensor, state overlay applied."""
-    state_dir = config.device.state_dir
+    state_dir = config.driver.state_dir
     sensors: dict[str, Sensor] = {}
-    for cfg in config.device.sensors:
+    for cfg in config.driver.sensors:
         sensors[cfg.id] = Sensor(
             id=cfg.id, source="w1", name=cfg.name, unit=cfg.unit, serial=cfg.serial
         )
-    if config.device.cpu is not None:
-        cpu = config.device.cpu
+    if config.driver.cpu is not None:
+        cpu = config.driver.cpu
         sensors[cpu.id] = Sensor(
             id=cpu.id,
             source="cpu",
@@ -135,17 +139,17 @@ def adopt_unconfigured_probes(config: AppConfig, sensors: dict[str, Sensor]) -> 
     """Add any bus probe not yet in `sensors` (id = serial). Returns the new ones."""
     known_serials = {s.serial for s in sensors.values() if s.serial}
     added: list[Sensor] = []
-    for serial in discover_w1_serials(config.device.w1_base_path):
+    for serial in discover_w1_serials(config.driver.w1_base_path):
         if serial in known_serials or serial in sensors:
             continue
         sensor = Sensor(
             id=serial,
             source="w1",
             name=serial,
-            unit=config.device.default_unit,
+            unit=config.driver.default_unit,
             serial=serial,
         )
-        apply_persisted_state(sensor, config.device.state_dir)
+        apply_persisted_state(sensor, config.driver.state_dir)
         sensors[serial] = sensor
         added.append(sensor)
         logger.info("Discovered unconfigured probe %s; publishing as id=%s", serial, serial)
@@ -156,6 +160,7 @@ def adopt_unconfigured_probes(config: AppConfig, sensors: dict[str, Sensor]) -> 
 
 
 def publish_identity(publisher: Publisher, sensor: Sensor) -> None:
+    publisher.publish(_topic(sensor.id, "driver"), json.dumps(DRIVER_KEY))
     publisher.publish(_topic(sensor.id, "name"), json.dumps(sensor.name))
     publisher.publish(_topic(sensor.id, "unit"), json.dumps(sensor.unit))
     publisher.publish(_topic(sensor.id, "source"), json.dumps(sensor.source))
@@ -170,7 +175,7 @@ def read_sensor(config: AppConfig, sensor: Sensor) -> Reading | None:
         assert sensor.thermal_zone is not None
         return read_cpu(sensor.thermal_zone)
     assert sensor.serial is not None
-    return read_w1(config.device.w1_base_path, sensor.serial)
+    return read_w1(config.driver.w1_base_path, sensor.serial)
 
 
 def publish_live(publisher: Publisher, sensor: Sensor, reading: Reading | None) -> None:
@@ -244,14 +249,14 @@ def subscribe_set_commands(publisher: Publisher, sensor: Sensor, state_dir: Path
 
 
 def run(config: AppConfig) -> None:
-    # Version is stamped by the release build (DEVICE_VERSION); unset reports "dev".
+    # Version is stamped by the release build (DRIVER_VERSION); unset reports "dev".
     # Board serial is read once, here, at process start.
-    info = build_info(os.environ.get("DEVICE_VERSION"), read_board_serial())
+    info = build_info(os.environ.get("DRIVER_VERSION"), read_board_serial())
     publisher = Publisher(config.mqtt, info)
     publisher.connect()
     sensors = build_sensors(config)
     for sensor in sensors.values():
-        subscribe_set_commands(publisher, sensor, config.device.state_dir)
+        subscribe_set_commands(publisher, sensor, config.driver.state_dir)
 
     try:
         while True:
@@ -259,8 +264,8 @@ def run(config: AppConfig) -> None:
             poll_once(publisher, config, sensors)
             # Probes discovered mid-run need their /set topics too.
             for sensor_id in set(sensors) - before:
-                subscribe_set_commands(publisher, sensors[sensor_id], config.device.state_dir)
-            time.sleep(config.device.update_interval_ms / 1000)
+                subscribe_set_commands(publisher, sensors[sensor_id], config.driver.state_dir)
+            time.sleep(config.driver.update_interval_ms / 1000)
     except KeyboardInterrupt:
         logger.info("Shutting down")
     finally:

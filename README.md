@@ -1,8 +1,8 @@
 # driver-temperature
 
-1-Wire (DS18B20) temperature sensing device for the renewvan bus
+1-Wire (DS18B20) temperature sensing driver for the renewvan bus
 
-Sensing device: reads every standalone temperature sensor the Pi can see
+Sensing driver: reads every standalone temperature sensor the Pi can see
 directly and publishes it as the `temperature` entity (`hub`'s
 `schema/temperature.schema.json`). It does **not** publish temperatures that
 belong to another entity's hardware: tank water temperature stays on
@@ -19,6 +19,7 @@ section name from `config.ini`; an unconfigured 1-Wire probe is published
 under its serial; the Pi CPU sensor is `cpu`.
 
 **Identity fields** (published at startup, and again after a user edit):
+- `driver` — string, this Driver's key (`"temperature"`), the same slug as `renewvan/temperature/info`; names which Driver owns the instance
 - `name` — string, label shown on the dashboard (editable)
 - `unit` — `"C"` / `"F"`, **display preference only** (editable)
 - `source` — `"w1"` (DS18B20) / `"cpu"` (Pi SoC)
@@ -42,16 +43,16 @@ defaults. Invalid payloads are logged and dropped. If the state file cannot
 be written the edit is rejected, so the retained topic never advertises a
 value that would be lost on restart.
 
-**Device liveness:** `renewvan/temperature/health` — `online`/`offline` via MQTT LWT.
+**Driver liveness:** `renewvan/temperature/health` — `online`/`offline` via MQTT LWT.
 
-**Device info:** `renewvan/temperature/info` — one retained JSON message
-describing this Device (see [Device info](#device-info)). Published on **every
+**Driver info:** `renewvan/temperature/info` — one retained JSON message
+describing this Driver (see [Driver info](#driver-info)). Published on **every
 connect, immediately before `online`**, so a consumer that sees `online`
 always finds info already retained. It is **never cleared**: it stays retained
-when the Device goes offline or its last will fires, which is what lets a
+when the Driver goes offline or its last will fires, which is what lets a
 consumer say "offline, last seen vX".
 
-Payload shapes match `hub`'s `schema/device-info.schema.json` for info and `hub`'s `schema/temperature.schema.json` for entities.
+Payload shapes match `hub`'s `schema/driver-info.schema.json` for info and `hub`'s `schema/temperature.schema.json` for entities.
 
 ## Wiring
 
@@ -74,7 +75,7 @@ name = Fridge
 unit = C
 ```
 
-No overlay, or no probes: the device still publishes the CPU sensor.
+No overlay, or no probes: the driver still publishes the CPU sensor.
 
 ### Pi CPU
 
@@ -142,27 +143,27 @@ ticked. It runs the tests, publishes only its own tag (never `:latest`) and writ
 to `main`. The process is shared by every renewvan repo and lives in `hub` (`hub/docs/adr/0015-one-release-process-via-reusable-workflows.md`);
 this repo's `release.yml` only says what it ships.
 
-The release workflow passes the tag as the `DEVICE_VERSION` build argument, which
-the Dockerfile promotes to an environment variable the device reads (see
-[Device info](#device-info)). Nothing else carries a version.
+The release workflow passes the tag as the `DRIVER_VERSION` build argument, which
+the Dockerfile promotes to an environment variable the driver reads (see
+[Driver info](#driver-info)). Nothing else carries a version.
 
-## Device info
+## Driver info
 
-The Device describes itself to the dashboard with a manifest plus two runtime
-values. Contract: `hub`'s `schema/device-info.schema.json` (decision record:
+The Driver describes itself to the dashboard with a manifest plus two runtime
+values. Contract: `hub`'s `schema/driver-info.schema.json` (decision record:
 `hub/docs/adr/0011-node-manifest-and-retained-info-topic.md`).
 
 **`manifest.json`** (repo root) is the single source of the static fields:
-`device` (`temperature`, the topic key), `product`, `source`, `publishes`, and
+`driver` (`temperature`, the topic key), `product`, `source`, `publishes`, and
 optional `manufacturer` / `homepage`. `version` and `board_serial` are
 **forbidden** in it. The image build copies it beside the module
-(`driver_temperature/manifest.json`); the Device reads that copy first and falls
+(`driver_temperature/manifest.json`); the Driver reads that copy first and falls
 back to the repo-root file for a checkout run.
 
 **`version`** comes from the git release tag and nowhere else. The release
-workflow passes it as the `DEVICE_VERSION` build argument, which becomes an
-environment variable the Device reads. When `DEVICE_VERSION` is unset or empty (a
-checkout run, a local `docker build`) the Device reports the literal **`dev`**.
+workflow passes it as the `DRIVER_VERSION` build argument, which becomes an
+environment variable the Driver reads. When `DRIVER_VERSION` is unset or empty (a
+checkout run, a local `docker build`) the Driver reports the literal **`dev`**.
 There is no `version` file or `__version__`, and the `pyproject.toml` version
 is a fixed placeholder nothing reads.
 
@@ -171,17 +172,27 @@ at start. A default container can read it, so no compose or Dockerfile change
 is needed. It is **omitted** (never faked, never `unknown`) when the file is
 unreadable, the line is missing or empty, or the value is all zeros.
 
-`driver_temperature/device_info.py` is a small helper deliberately **copied** into
-each Python device repo rather than shared as a package, so each Device releases
+`driver_temperature/driver_info.py` is a small helper deliberately **copied** into
+each Python driver repo rather than shared as a package, so each Driver releases
 independently.
 
 **CI gate:** `.github/workflows/manifest.yml` calls hub's reusable manifest workflow,
-which validates `manifest.json` against `device-manifest.schema.json` at a **pinned hub
+which validates `manifest.json` against `driver-manifest.schema.json` at a **pinned hub
 commit** (`hub-ref`, the same SHA the workflow is pinned with) and fails if a manifest
 containing `version` is accepted. Bump both together to adopt a newer contract. To check
 locally:
 
 ```bash
-npx --yes ajv-cli@5 validate -s path/to/hub/schema/device-manifest.schema.json -d manifest.json
+npx --yes ajv-cli@5 validate -s path/to/hub/schema/driver-manifest.schema.json -d manifest.json
 ```
 
+## Upgrading from the Device-named release
+
+The publisher concept was renamed Device → Driver with no compatibility shim:
+
+- The identity section in `config.ini` is now `[driver]` (was `[device]`). A live
+  `config.ini` that still says `[device]` stops loading until it is edited. `[sensor.<id>]`
+  sections are unchanged.
+- The release build argument / environment variable is `DRIVER_VERSION` (was `DEVICE_VERSION`).
+- The info payload key is `driver` (was `device`); clear the old retained message once:
+  `mosquitto_pub -r -n -t renewvan/temperature/info`.

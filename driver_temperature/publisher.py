@@ -2,8 +2,8 @@
 
 Shared boilerplate across every renewvan/driver-* repo (see
 driver-tank/driver_tank/publisher.py): connect with retry/backoff, an LWT on a
-health topic so downstream consumers can detect a dead device, and a
-long-lived connection -- this device is the source of truth, not a
+health topic so downstream consumers can detect a dead driver, and a
+long-lived connection -- this driver is the source of truth, not a
 re-publisher.
 """
 

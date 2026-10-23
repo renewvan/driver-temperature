@@ -3,6 +3,7 @@ from pathlib import Path
 
 from driver_temperature.config import load_config
 from driver_temperature.driver import (
+    DRIVER_KEY,
     Sensor,
     adopt_unconfigured_probes,
     apply_persisted_state,
@@ -40,7 +41,7 @@ def make_config(tmp_path: Path, extra: str = ""):
     zone.write_text("51600\n")
     local = tmp_path / "config.ini"
     local.write_text(
-        f"[device]\nw1_base_path = {base}\ncpu_thermal_zone = {zone}\n"
+        f"[driver]\nw1_base_path = {base}\ncpu_thermal_zone = {zone}\n"
         f"state_dir = {tmp_path / 'state'}\n{extra}"
     )
     return load_config(local_path=local), base
@@ -65,6 +66,30 @@ def test_poll_publishes_identity_and_live_for_configured_probe(tmp_path: Path) -
     assert out[p + "status"] == "ok"
     assert out["renewvan/temperature/cpu/temperature_c"] == 51.6
     assert "renewvan/temperature/cpu/serial" not in out
+
+
+def test_every_instance_names_its_driver_with_its_identity(tmp_path: Path) -> None:
+    config, base = make_config(tmp_path, f"[sensor.fridge]\nserial = {SERIAL_A}\n")
+    make_w1(base, SERIAL_A)
+    make_w1(base, SERIAL_B)  # unconfigured probe, adopted mid-run
+    pub = FakePublisher()
+    poll_once(pub, config, build_sensors(config))
+    out = pub.latest()
+    for sensor_id in ("fridge", SERIAL_B, "cpu"):
+        assert out[f"renewvan/temperature/{sensor_id}/driver"] == "temperature"
+        assert out[f"renewvan/temperature/{sensor_id}/name"]  # name untouched alongside it
+
+
+def test_driver_key_matches_manifest_and_is_published_once(tmp_path: Path) -> None:
+    manifest = json.loads((Path(__file__).resolve().parent.parent / "manifest.json").read_text())
+    assert DRIVER_KEY == manifest["driver"]
+    config, _ = make_config(tmp_path)
+    pub = FakePublisher()
+    sensors = build_sensors(config)
+    poll_once(pub, config, sensors)
+    poll_once(pub, config, sensors)
+    topics = [t for t, _ in pub.published]
+    assert topics.count("renewvan/temperature/cpu/driver") == 1
 
 
 def test_identity_published_once_live_every_poll(tmp_path: Path) -> None:
@@ -176,7 +201,7 @@ def test_corrupt_or_invalid_state_is_ignored(tmp_path: Path) -> None:
     assert sensor.unit == "C"
 
 
-def test_run_stamps_device_version_env_into_published_info(tmp_path: Path, monkeypatch) -> None:
+def test_run_stamps_driver_version_env_into_published_info(tmp_path: Path, monkeypatch) -> None:
     import json as _json
 
     import driver_temperature.driver as driver
@@ -201,9 +226,9 @@ def test_run_stamps_device_version_env_into_published_info(tmp_path: Path, monke
 
     for env, expected in (("v4.5.6", "v4.5.6"), (None, "dev")):
         if env is None:
-            monkeypatch.delenv("DEVICE_VERSION", raising=False)
+            monkeypatch.delenv("DRIVER_VERSION", raising=False)
         else:
-            monkeypatch.setenv("DEVICE_VERSION", env)
+            monkeypatch.setenv("DRIVER_VERSION", env)
         try:
             driver.run(config)
         except StopRun:

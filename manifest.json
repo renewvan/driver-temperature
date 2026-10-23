@@ -1,5 +1,5 @@
 {
-  "device": "temperature",
+  "driver": "temperature",
   "product": "1-Wire temperature sensor",
   "source": "DS18B20 1-Wire probes and the Pi SoC thermal zone",
   "publishes": ["temperature"],

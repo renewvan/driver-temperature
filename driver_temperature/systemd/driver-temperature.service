@@ -1,5 +1,5 @@
 [Unit]
-Description=driver-temperature MQTT device
+Description=driver-temperature MQTT driver
 After=network-online.target
 Wants=network-online.target
 

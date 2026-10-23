@@ -25,7 +25,7 @@ def discover_w1_serials(base_path: Path) -> list[str]:
     """Serials of every DS18B20 currently on the bus, sorted for stable ordering.
 
     Returns [] when base_path does not exist (1-Wire overlay not enabled),
-    so the device still serves the CPU sensor on a Pi without w1-gpio.
+    so the driver still serves the CPU sensor on a Pi without w1-gpio.
     """
     if not base_path.is_dir():
         return []
