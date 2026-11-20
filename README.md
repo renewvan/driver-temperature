@@ -1,6 +1,6 @@
 # driver-temperature
 
-1-Wire (DS18B20) temperature sensing driver for the renewvan bus
+1-Wire (DS18B20) temperature sensing driver for the Renewvan bus
 
 Sensing driver: reads every standalone temperature sensor the Pi can see
 directly and publishes it as the `temperature` entity (`hub`'s
@@ -140,7 +140,7 @@ file pins by tag (never builds from source — see
 
 A beta from a feature branch: dispatch the workflow on that branch with **prerelease**
 ticked. It runs the tests, publishes only its own tag (never `:latest`) and writes nothing
-to `main`. The process is shared by every renewvan repo and lives in `hub` (`hub/docs/adr/0015-one-release-process-via-reusable-workflows.md`);
+to `main`. The process is shared by every Renewvan repo and lives in `hub` (`hub/docs/adr/0015-one-release-process-via-reusable-workflows.md`);
 this repo's `release.yml` only says what it ships.
 
 The release workflow passes the tag as the `DRIVER_VERSION` build argument, which
